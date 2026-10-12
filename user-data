@@ -1,0 +1,58 @@
+#cloud-config
+# ROY — автоматическая установка Ubuntu Server (live-server 26.04) в ВМ на vSphere.
+# Положить рядом пустой файл meta-data, оба отдать по HTTP(S) из одного каталога.
+# Строка для GRUB (перед "---"):  autoinstall ds=nocloud-net\;s=https://<адрес каталога>/
+#
+# Что получится: весь диск под корень (без LVM-половинки), DHCP (10.1.1.250 закреплён на
+# шлюзе), пользователь alchemist с ключом Mac и sudo без пароля, вход по SSH только ключом,
+# fail2ban, open-vm-tools. После установки ВМ сама перезагрузится.
+autoinstall:
+  version: 1
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+  timezone: Asia/Yekaterinburg
+  refresh-installer:
+    update: false
+  source:
+    id: ubuntu-server
+    search_drivers: false
+  network:
+    version: 2
+    ethernets:
+      primary:
+        match:
+          name: "e*"
+        dhcp4: true
+        # Если DHCP в сети 10.1.1.0/24 нет — заменить строку dhcp4 на три ниже (шлюз уточнить у коллеги):
+        # addresses: [10.1.1.250/24]
+        # routes: [{to: default, via: 10.1.1.1}]
+        # nameservers: {addresses: [10.1.1.1, 8.8.8.8]}
+  storage:
+    layout:
+      name: direct
+  identity:
+    hostname: roy
+    username: alchemist
+    password: "$6$v5K1DmsJ/ef0E3fm$NFikySDtplgvKMoP2SewKIU3ufVCzajiqnVqgUmtmvclX4cjWXS8l/8C.1jlxWYcdbAhZvW14cz05kQ0LVvQy/"
+  ssh:
+    install-server: true
+    allow-pw: false
+    authorized-keys:
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJtvv7sUE0PaJxWHYPyCvbJFIehQlvjgbi+H2UJzTW1f alchemist-platform"
+  packages:
+    - open-vm-tools
+    - curl
+    - ca-certificates
+    - nftables
+    - jq
+    - unzip
+    - git
+    - fail2ban
+  updates: security
+  late-commands:
+    - echo 'alchemist ALL=(ALL) NOPASSWD:ALL' > /target/etc/sudoers.d/90-alchemist
+    - chmod 440 /target/etc/sudoers.d/90-alchemist
+    - printf 'PermitRootLogin no\nMaxAuthTries 3\nUseDNS no\nClientAliveInterval 60\nClientAliveCountMax 3\n' > /target/etc/ssh/sshd_config.d/90-roy.conf
+    - printf 'vm.swappiness = 10\n' > /target/etc/sysctl.d/90-agent.conf
+  shutdown: reboot
